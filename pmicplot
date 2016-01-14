@@ -1,0 +1,96 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import re
+import sys
+import ConfigParser
+import pandas as pd
+import matplotlib.pyplot as plt
+import commands
+import subprocess
+import ntpath
+import optparse
+
+
+class PmicPlot():
+    def __init__(self, config_file):
+        self.config = ConfigParser.RawConfigParser()
+        self.config.read(config_file)
+        self.hwmon_nodes = self.config.get('hwmon', 'Nodes').split()
+        self.hwnon_factor = self.config.get('hwmon', 'ScaleFactor').split()
+        self.battery_nodes = self.config.get('battery', 'Nodes').split()
+        self.battery_factor = self.config.get('battery', 'ScaleFactor').split()
+        self.tgt_data_file = self.config.get('target', 'DataFile')
+
+    def gen_tgt_scpt(self):
+        head = 'head=' + '"' + ','.join(self.hwmon_nodes) + ',capacity,'\
+            + ','.join(self.battery_nodes) + ',"\n'
+        hw_nodes='hwmon_nodes='
+        bat_nodes='battery_nodes='
+        tgt_dt_file='data_file=' + self.tgt_data_file + '\n'
+        hw_nodes =hw_nodes + '"'+ self.config.get('hwmon', 'Nodes')+ '"\n'
+        bat_nodes=bat_nodes+ '"capacity ' + self.config.get('battery', 'Nodes')+ '"\n'
+
+        with open('.target.sh', 'r') as tgt_tmp_file:
+            contents=tgt_tmp_file.read()
+            contents= head + tgt_dt_file + hw_nodes + bat_nodes + contents
+            with open ('target.sh', 'w') as tgt_final_file:
+                tgt_final_file.write(contents)
+
+    def preprocess(self):
+        with open(ntpath.basename(self.tgt_data_file), "r") as sources:
+            lines = sources.readlines()
+        with open(ntpath.basename(self.tgt_data_file), "w") as sources:
+            for line in lines:
+                sources.write(re.sub(r'Result:', '', line))
+        with open(ntpath.basename(self.tgt_data_file), "r") as sources:
+            lines = sources.readlines()
+        with open(ntpath.basename(self.tgt_data_file), "w") as sources:
+            for line in lines:
+                sources.write(re.sub(r' Raw:[0-9a-f]*', '', line))
+
+    def plot_pmic(self):
+        fig = plt.figure()
+        ax_one = fig.add_subplot(111)
+        pmic_pd = pd.read_csv(ntpath.basename(self.tgt_data_file))
+        for idx, pmic_node in enumerate(self.hwmon_nodes):
+            ax_one.plot(pmic_pd[pmic_node] * int(self.hwnon_factor[idx]), label=pmic_node)
+        for idx, pmic_node in enumerate(self.battery_nodes):
+            ax_one.plot(pmic_pd[pmic_node] * int(self.battery_factor[idx]), label=pmic_node)
+        ax_two = ax_one.twinx()
+        ax_two.plot(pmic_pd['capacity'], label = 'capacity', linewidth=2, color='#B22222')
+        lines, labels = ax_one.get_legend_handles_labels()
+        lines2, labels2 = ax_two.get_legend_handles_labels()
+        ax_two.legend(lines + lines2, labels + labels2,loc='upper center', bbox_to_anchor=(0.5, 1.05),
+            ncol=5, fancybox=True, shadow=True)
+        num_lines = sum(1 for line in open(ntpath.basename(self.tgt_data_file)))
+        ax_two.set_xlim(0, num_lines)
+        ax_two.set_ylim(0, 105)
+        plt.ylabel(r'[capacity (%)]')
+        plt.show()
+
+    def get_data(self):
+        subprocess.call(['adb', 'pull', self.tgt_data_file])
+
+def main():
+    parser = optparse.OptionParser()
+    parser.add_option('-c', '--config',   action="store_true", dest="c", help="read config and generate script for target device")
+    parser.add_option('-g', '--get-data', action="store_true", dest="g", 
+         help="get data from the target device, make sure the adb works good and target device connected")
+    parser.add_option('-p', '--plot',     action="store_true", dest="p", help="draw a plot based on the data get from target device")
+    options, args = parser.parse_args()
+    pm = PmicPlot('config.ini')
+    if  not (options.c or options.g or options.p):
+        parser.print_help()
+	sys.exit(1)
+    if options.c:
+        pm.gen_tgt_scpt()
+        return
+    if options.g:
+        pm.get_data()
+    if options.p:
+        pm.preprocess()
+        pm.plot_pmic()
+
+if __name__ == "__main__":
+    main()
