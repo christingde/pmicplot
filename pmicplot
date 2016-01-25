@@ -7,33 +7,56 @@ import ConfigParser
 import pandas as pd
 import matplotlib.pyplot as plt
 import commands
-import subprocess
+from subprocess import Popen, PIPE
 import ntpath
 import optparse
+
+
+class Tools():
+    def __init__():
+        pass
+
+    @staticmethod
+    def shell(cmd):
+        p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
+        out, err = p.communicate()
+        return p.returncode,out,err
 
 
 class PmicPlot():
     def __init__(self, config_file):
         self.config = ConfigParser.RawConfigParser()
         self.config.read(config_file)
-        self.hwmon_nodes = self.config.get('hwmon', 'Nodes').split()
-        self.hwnon_factor = self.config.get('hwmon', 'ScaleFactor').split()
-        self.battery_nodes = self.config.get('battery', 'Nodes').split()
-        self.battery_factor = self.config.get('battery', 'ScaleFactor').split()
-        self.tgt_data_file = self.config.get('target', 'DataFile')
+        self.tgt_data_file = self.config.get('Target', 'DataFile')
+        self.left_plots = self.config.get('LeftPlot', 'Nodes').split()
+        self.left_plots_factor = self.config.get('LeftPlot', 'ScaleFactor').split()
+        self.right_plot = self.config.get('RightPlot', 'Nodes').strip();
+
+    def get_tgt_nodes(self, cmd):
+        rc = Tools.shell(cmd)
+        if rc[0] != 0:
+            print('Please connect your target device.')
+            return
+        meaningful_lines = re.sub('(?m)^l.*?\n|(?m)^d.*?\n|(?m).*?uevent.*?\n', '', rc[1]).strip().split('\n')
+        meaningful_names = ''
+        for line in meaningful_lines:
+            meaningful_names = meaningful_names + line.split()[-1] + ' '
+        return meaningful_names
 
     def gen_tgt_scpt(self):
-        head = 'head=' + '"' + ','.join(self.hwmon_nodes) + ',capacity,'\
-            + ','.join(self.battery_nodes) + ',"\n'
-        hw_nodes='hwmon_nodes='
-        bat_nodes='battery_nodes='
-        tgt_dt_file='data_file=' + self.tgt_data_file + '\n'
-        hw_nodes =hw_nodes + '"'+ self.config.get('hwmon', 'Nodes')+ '"\n'
-        bat_nodes=bat_nodes+ '"capacity ' + self.config.get('battery', 'Nodes')+ '"\n'
-
+        hw_nodes = ''
+        hw_dirs = Tools.shell('adb shell ls "/sys/class/hwmon/hwmon*/device"')
+        for idx, item in enumerate(hw_dirs[1].split()):
+            print item
+            print 'hwmon_nodes_' + str(idx) + '=' + self.get_tgt_nodes('adb shell ls -l ' + item + '/')
+        bat_nodes = self.get_tgt_nodes('adb shell ls -l /sys/class/power_supply/battery/')
+        head = 'head=' + re.sub(' ', ',', (hw_nodes + bat_nodes).strip()) + ',\n'
+        bat_nodes = 'battery_nodes=' + '"' + bat_nodes.strip() + '"' + '\n'
+        hw_nodes = 'hwmon_nodes=' + '"' + hw_nodes.strip() + '"' + '\n'
+        tgt_data_file = 'data_file=' + self.tgt_data_file + '\n'
         with open('.target.sh', 'r') as tgt_tmp_file:
             contents=tgt_tmp_file.read()
-            contents= head + tgt_dt_file + hw_nodes + bat_nodes + contents
+            contents= head + tgt_data_file + bat_nodes + hw_nodes + contents
             with open ('target.sh', 'w') as tgt_final_file:
                 tgt_final_file.write(contents)
 
@@ -53,12 +76,10 @@ class PmicPlot():
         fig = plt.figure()
         ax_one = fig.add_subplot(111)
         pmic_pd = pd.read_csv(ntpath.basename(self.tgt_data_file))
-        for idx, pmic_node in enumerate(self.hwmon_nodes):
-            ax_one.plot(pmic_pd[pmic_node] * int(self.hwnon_factor[idx]), label=pmic_node)
-        for idx, pmic_node in enumerate(self.battery_nodes):
-            ax_one.plot(pmic_pd[pmic_node] * int(self.battery_factor[idx]), label=pmic_node)
+        for idx, pmic_node in enumerate(self.left_plots):
+            ax_one.plot(pmic_pd[pmic_node] * int(self.left_plots_factor[idx]), label=pmic_node)
         ax_two = ax_one.twinx()
-        ax_two.plot(pmic_pd['capacity'], label = 'capacity', linewidth=2, color='#B22222')
+        ax_two.plot(pmic_pd[self.right_plot], label=self.right_plot, linewidth=2, color='#B22222')
         lines, labels = ax_one.get_legend_handles_labels()
         lines2, labels2 = ax_two.get_legend_handles_labels()
         ax_two.legend(lines + lines2, labels + labels2,loc='upper center', bbox_to_anchor=(0.5, 1.05),
@@ -70,7 +91,9 @@ class PmicPlot():
         plt.show()
 
     def get_data(self):
-        subprocess.call(['adb', 'pull', self.tgt_data_file])
+        Tools.shell('adb pull ' +  self.tgt_data_file)
+	self.preprocess()
+
 
 def main():
     parser = optparse.OptionParser()
