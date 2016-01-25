@@ -13,7 +13,7 @@ import optparse
 
 
 class Tools():
-    def __init__():
+    def __init__(self):
         pass
 
     @staticmethod
@@ -46,9 +46,12 @@ class PmicPlot():
     def gen_tgt_scpt(self):
         hw_nodes = ''
         hw_dirs = Tools.shell('adb shell ls "/sys/class/hwmon/hwmon*/device"')
-        for idx, item in enumerate(hw_dirs[1].split()):
-            print item
-            print 'hwmon_nodes_' + str(idx) + '=' + self.get_tgt_nodes('adb shell ls -l ' + item + '/')
+        # not all targets get hwmon nodes, such as my meizu 2
+        if hw_dirs[0] == 0 and (not re.search('No such file or directory', hw_dirs[1])):
+            for idx, item in enumerate(hw_dirs[1].split()):
+                print item
+                print 'hwmon_nodes_' + str(idx) + '=' + self.get_tgt_nodes('adb shell ls -l ' + item + '/')
+        # yes! all targets get battery nodes.
         bat_nodes = self.get_tgt_nodes('adb shell ls -l /sys/class/power_supply/battery/')
         head = 'head=' + re.sub(' ', ',', (hw_nodes + bat_nodes).strip()) + ',\n'
         bat_nodes = 'battery_nodes=' + '"' + bat_nodes.strip() + '"' + '\n'
@@ -83,7 +86,7 @@ class PmicPlot():
         lines, labels = ax_one.get_legend_handles_labels()
         lines2, labels2 = ax_two.get_legend_handles_labels()
         ax_two.legend(lines + lines2, labels + labels2,loc='upper center', bbox_to_anchor=(0.5, 1.05),
-            ncol=5, fancybox=True, shadow=True)
+                      ncol=5, fancybox=True, shadow=True)
         num_lines = sum(1 for line in open(ntpath.basename(self.tgt_data_file)))
         ax_two.set_xlim(0, num_lines)
         ax_two.set_ylim(0, 105)
@@ -92,20 +95,23 @@ class PmicPlot():
 
     def get_data(self):
         Tools.shell('adb pull ' +  self.tgt_data_file)
-	self.preprocess()
+        self.preprocess()
 
 
 def main():
     parser = optparse.OptionParser()
-    parser.add_option('-c', '--config',   action="store_true", dest="c", help="read config and generate script for target device")
-    parser.add_option('-g', '--get-data', action="store_true", dest="g", 
-         help="get data from the target device, make sure the adb works good and target device connected")
-    parser.add_option('-p', '--plot',     action="store_true", dest="p", help="draw a plot based on the data get from target device")
+    parser.add_option('-c', '--config',   action="store_true", dest="c",
+                      help="read config and generate script for target device")
+    parser.add_option('-g', '--get-data', action="store_true", dest="g",
+                      help="get data from the target device, "
+                           "make sure the adb works good and target device connected")
+    parser.add_option('-p', '--plot',     action="store_true", dest="p",
+                      help="draw a plot based on the data get from target device")
     options, args = parser.parse_args()
     pm = PmicPlot('config.ini')
     if  not (options.c or options.g or options.p):
         parser.print_help()
-	sys.exit(1)
+        sys.exit(1)
     if options.c:
         pm.gen_tgt_scpt()
         return
