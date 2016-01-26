@@ -49,7 +49,8 @@ class PmicPlot():
         tgt_batt_nodes = self.get_tgt_nodes('adb shell ls -l /sys/class/power_supply/battery/')
         if not tgt_batt_nodes:
             return
-        contents = '"' + tgt_batt_nodes + '"\n'
+        tgt_bat_nodes_var = 'battery_nodes="' + tgt_batt_nodes.strip() + '"\n'
+        contents = contents + tgt_bat_nodes_var
         rc, tgt_hw_dirs, unused  = Tools.shell('adb shell ls "/sys/class/hwmon/hwmon*/device"')
         if not re.search('No such file or directory', tgt_hw_dirs):
             tgt_hw_dirs_var = 'hw_dirs="' + tgt_hw_dirs.replace('\r\n', ' ').strip() + '"'
@@ -57,6 +58,10 @@ class PmicPlot():
             print contents
             for idx, item in enumerate(tgt_hw_dirs.split()):
                 print idx, self.get_tgt_nodes('adb shell ls -l ' + item + '/')
+        tgt_dt_file_var = 'data_file=' + self.tgt_data_file
+        contents = contents  + tgt_dt_file_var + '\n'
+        tgt_head_var = 'head="' + tgt_batt_nodes.strip().replace(' ', ',') + '",'
+        contents = contents + tgt_head_var
         with open('.target.sh', 'r') as tgt_tmp_file:
             contents = contents + tgt_tmp_file.read()
             with open ('target.sh', 'w') as tgt_final_file:
