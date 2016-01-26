@@ -33,6 +33,7 @@ class PmicPlot():
         self.right_plot = self.config.get('RightPlot', 'Nodes').strip();
 
     def get_tgt_nodes(self, cmd):
+        print cmd
         rc = Tools.shell(cmd)
         if rc[0] != 0:
             print('Please connect your target device.')
@@ -44,22 +45,20 @@ class PmicPlot():
         return meaningful_names
 
     def gen_tgt_scpt(self):
-        hw_nodes = ''
-        hw_dirs = Tools.shell('adb shell ls "/sys/class/hwmon/hwmon*/device"')
-        # not all targets get hwmon nodes, such as my meizu 2
-        if hw_dirs[0] == 0 and (not re.search('No such file or directory', hw_dirs[1])):
-            for idx, item in enumerate(hw_dirs[1].split()):
-                print item
-                print 'hwmon_nodes_' + str(idx) + '=' + self.get_tgt_nodes('adb shell ls -l ' + item + '/')
-        # yes! all targets get battery nodes.
-        bat_nodes = self.get_tgt_nodes('adb shell ls -l /sys/class/power_supply/battery/')
-        head = 'head=' + re.sub(' ', ',', (hw_nodes + bat_nodes).strip()) + ',\n'
-        bat_nodes = 'battery_nodes=' + '"' + bat_nodes.strip() + '"' + '\n'
-        hw_nodes = 'hwmon_nodes=' + '"' + hw_nodes.strip() + '"' + '\n'
-        tgt_data_file = 'data_file=' + self.tgt_data_file + '\n'
+        contents = ''
+        tgt_batt_nodes = self.get_tgt_nodes('adb shell ls -l /sys/class/power_supply/battery/')
+        if not tgt_batt_nodes:
+            return
+        contents = '"' + tgt_batt_nodes + '"\n'
+        rc, tgt_hw_dirs, unused  = Tools.shell('adb shell ls "/sys/class/hwmon/hwmon*/device"')
+        if not re.search('No such file or directory', tgt_hw_dirs):
+            tgt_hw_dirs_var = 'hw_dirs="' + tgt_hw_dirs.replace('\r\n', ' ').strip() + '"'
+            contents = contents + tgt_hw_dirs_var
+            print contents
+            for idx, item in enumerate(tgt_hw_dirs.split()):
+                print idx, self.get_tgt_nodes('adb shell ls -l ' + item + '/')
         with open('.target.sh', 'r') as tgt_tmp_file:
-            contents=tgt_tmp_file.read()
-            contents= head + tgt_data_file + bat_nodes + hw_nodes + contents
+            contents = contents + tgt_tmp_file.read()
             with open ('target.sh', 'w') as tgt_final_file:
                 tgt_final_file.write(contents)
 
