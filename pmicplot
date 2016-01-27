@@ -17,8 +17,10 @@ class Tools():
         pass
 
     @staticmethod
-    def shell(cmd):
+    def shell(cmd, no_wait_rtn=None):
         p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
+        if no_wait_rtn:
+            return
         out, err = p.communicate()
         return p.returncode,out,err
 
@@ -28,6 +30,7 @@ class PmicPlot():
         self.config = ConfigParser.RawConfigParser()
         self.config.read(config_file)
         self.tgt_data_file = self.config.get('Target', 'DataFile')
+        self.tgt_scpt_path = self.config.get('Target', 'ScriptPath')
         self.left_plots = self.config.get('LeftPlot', 'Nodes').split()
         self.left_plots_factor = self.config.get('LeftPlot', 'ScaleFactor').split()
         self.right_plot = self.config.get('RightPlot', 'Nodes').strip();
@@ -105,6 +108,13 @@ class PmicPlot():
         Tools.shell('adb pull ' +  self.tgt_data_file)
         self.preprocess()
 
+    def run_tgt_scpt(self):
+        rc = Tools.shell('adb push target.sh ' + self.tgt_scpt_path.strip() + '/')
+        if rc[0] != 0:
+            print('Please connect your target device.')
+            return
+        Tools.shell(r'adb shell  "nohup sh ' + self.tgt_scpt_path.strip() + r'/target.sh &"', True)
+
 
 def main():
     parser = optparse.OptionParser()
@@ -115,13 +125,18 @@ def main():
                            "make sure the adb works good and target device connected")
     parser.add_option('-p', '--plot',     action="store_true", dest="p",
                       help="draw a plot based on the data get from target device")
+    parser.add_option('-r', '--run',     action="store_true", dest="r",
+                      help="run the script on the target to gather data")
     options, args = parser.parse_args()
     pm = PmicPlot('config.ini')
-    if  not (options.c or options.g or options.p):
+    if  not (options.c or options.g or options.p or options.r):
         parser.print_help()
         sys.exit(1)
     if options.c:
         pm.gen_tgt_scpt()
+        return
+    if options.r:
+        pm.run_tgt_scpt()
         return
     if options.g:
         pm.get_data()
