@@ -33,7 +33,7 @@ class PmicPlot():
         self.right_plot = self.config.get('RightPlot', 'Nodes').strip();
 
     def get_tgt_nodes(self, cmd):
-        print cmd
+        #print cmd
         rc = Tools.shell(cmd)
         if rc[0] != 0:
             print('Please connect your target device.')
@@ -46,6 +46,7 @@ class PmicPlot():
 
     def gen_tgt_scpt(self):
         contents = ''
+        tgt_head_var = ''
         tgt_batt_nodes = self.get_tgt_nodes('adb shell ls -l /sys/class/power_supply/battery/')
         if not tgt_batt_nodes:
             return
@@ -54,13 +55,16 @@ class PmicPlot():
         rc, tgt_hw_dirs, unused  = Tools.shell('adb shell ls "/sys/class/hwmon/hwmon*/device"')
         if not re.search('No such file or directory', tgt_hw_dirs):
             tgt_hw_dirs_var = 'hw_dirs="' + tgt_hw_dirs.replace('\r\n', ' ').strip() + '"'
-            contents = contents + tgt_hw_dirs_var
-            print contents
+            contents = contents + tgt_hw_dirs_var + '\n'
+            #print contents
             for idx, item in enumerate(tgt_hw_dirs.split()):
-                print idx, self.get_tgt_nodes('adb shell ls -l ' + item + '/')
+                tgt_hw_nodes = self.get_tgt_nodes('adb shell ls -l ' + item + '/')
+                tgt_head_var = tgt_head_var  + tgt_hw_nodes.replace(' ', ',')
+                #print 'hwmon_nodes_' + str(idx) + '="' + self.get_tgt_nodes('adb shell ls -l ' + item + '/').strip() + '"'
+                contents = contents + 'hwmon_nodes_' + str(idx) + '="' + tgt_hw_nodes.strip() + '"\n'
         tgt_dt_file_var = 'data_file=' + self.tgt_data_file
         contents = contents  + tgt_dt_file_var + '\n'
-        tgt_head_var = 'head="' + tgt_batt_nodes.strip().replace(' ', ',') + '",'
+        tgt_head_var = 'head="' + tgt_head_var + tgt_batt_nodes.strip().replace(' ', ',') + ',"\n'
         contents = contents + tgt_head_var
         with open('.target.sh', 'r') as tgt_tmp_file:
             contents = contents + tgt_tmp_file.read()

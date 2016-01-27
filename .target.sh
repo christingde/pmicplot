@@ -8,9 +8,15 @@ echo ${head} >>${data_file}
 
 while true 
 do
-	for hw_nd in ${hwmon_nodes}
+	i=0
+	for dir in ${hw_dirs};
 	do
-		echo -n "$(cat /sys/class/hwmon/hwmon*/device/${hw_nd})," >>${data_file}
+		temp_var="hwmon_nodes_$i"
+		for t in $(eval "echo \$$temp_var")
+		do
+			echo -n	"$(cat "${dir}/${t}")," >>${data_file}
+		done
+		((i++))
 	done
 
 	for bt_nd in ${battery_nodes}
