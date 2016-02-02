@@ -1,5 +1,7 @@
 # pmicplot  
 A python graphical tool for monitor PMIC related nodes  
+
+![Alt text](data/meilan2.png?raw=true "Optional Title")
   
 What is it?  
 ----------  
