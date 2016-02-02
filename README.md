@@ -1,5 +1,7 @@
 # pmicplot  
-A python graphical tool for monitor PMIC related nodes  
+A python graphical tool for monitor PMIC related nodes. The following is the  
+charging plot of my meilan2 phone. As you can see there is a obvious bug when  
+the capacity is about 80%, because it jump to 100% suddenly.  
 
 ![Alt text](data/meilan2.png?raw=true "Optional Title")
   
@@ -25,6 +27,7 @@ Options:
   -g, --get-data  get data from the target device, make sure the adb works  
                   good and target device connected  
   -p, --plot      draw a plot based on the data get from target device  
+  -r, --run       run the script on the target to gather data  
   
 Generally, you should first edit the config.ini file to meet your request.  
   
